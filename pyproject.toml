@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sql-parquet-compare"
+version = "0.1.0"
+description = "Like-for-like comparison of SQL Server tables and Parquet files in Azure Storage"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "sqlalchemy>=2.0",
+  "pymssql>=2.3",
+  "azure-storage-blob>=12.19",
+  "azure-identity>=1.17",
+  "pyyaml>=6.0",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+odbc = ["pyodbc>=5.1"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+sql-parquet-compare = "sql_parquet_compare.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+  "integration: requires docker compose (SQL Server + Azurite)",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]

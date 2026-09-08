@@ -1,0 +1,40 @@
+sql:
+  dialect: ${SQL_DIALECT:-pymssql}
+  host: ${SQL_HOST:-127.0.0.1}
+  port: ${SQL_PORT:-14333}
+  database: ${SQL_DATABASE:-CompareTest}
+  username: ${SQL_USERNAME:-sa}
+  password: ${SQL_PASSWORD:-SqlParquet_1}
+
+storage:
+  backend: azure
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING:-UseDevelopmentStorage=true}
+  account_url: ${AZURE_STORAGE_ACCOUNT_URL:-}
+  container: ${AZURE_STORAGE_CONTAINER:-parquet}
+
+defaults:
+  float_atol: 1.0e-6
+  float_rtol: 1.0e-9
+  decimal_places: 6
+  datetime_unit: us
+  strip_strings: true
+  case_sensitive_columns: false
+  max_mismatches: 50
+
+tables:
+  - name: customers
+    sql: dbo.customers
+    parquet: customers/customers.parquet
+    keys: [customer_id]
+    bool_columns: [is_active]
+
+  - name: orders
+    sql: dbo.orders
+    parquet: orders/
+    keys: [order_id]
+    decimal_places: 4
+
+  - name: order_lines
+    sql: dbo.order_lines
+    parquet: order_lines/order_lines.parquet
+    keys: [order_id, line_no]

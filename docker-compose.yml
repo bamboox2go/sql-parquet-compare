@@ -1,0 +1,20 @@
+services:
+  sqlserver:
+    # 2022 Developer edition under qemu on Apple Silicon. Native ARM SQL Edge
+    # currently crashes in Docker Desktop on this machine.
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: SqlParquet_1
+      MSSQL_PID: Developer
+    ports:
+      - "14333:1433"
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
