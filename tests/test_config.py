@@ -31,6 +31,8 @@ tables:
     assert config.sql.host == "sql.example"
     assert config.sql.password == "secret"
     assert config.sql.database == "CompareTest"
+    assert config.sql.auth == "sql"
+    assert config.storage.auth == "connection_string"
     assert config.tables[0].bool_columns == ["is_active"]
 
 

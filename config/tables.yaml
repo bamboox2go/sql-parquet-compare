@@ -1,16 +1,23 @@
 sql:
   dialect: ${SQL_DIALECT:-pymssql}
+  auth: ${SQL_AUTH:-sql}
   host: ${SQL_HOST:-127.0.0.1}
   port: ${SQL_PORT:-14333}
   database: ${SQL_DATABASE:-CompareTest}
   username: ${SQL_USERNAME:-sa}
   password: ${SQL_PASSWORD:-SqlParquet_1}
+  encrypt: ${SQL_ENCRYPT:-no}
+  trust_server_certificate: ${SQL_TRUST_SERVER_CERTIFICATE:-}
+  tenant_id: ${AZURE_TENANT_ID:-}
 
 storage:
   backend: azure
+  auth: ${STORAGE_AUTH:-connection_string}
   connection_string: ${AZURE_STORAGE_CONNECTION_STRING:-UseDevelopmentStorage=true}
+  account_name: ${AZURE_STORAGE_ACCOUNT:-}
   account_url: ${AZURE_STORAGE_ACCOUNT_URL:-}
   container: ${AZURE_STORAGE_CONTAINER:-parquet}
+  tenant_id: ${AZURE_TENANT_ID:-}
 
 defaults:
   float_atol: 1.0e-6

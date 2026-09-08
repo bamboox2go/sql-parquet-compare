@@ -4,6 +4,12 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, URL
 
+from sql_parquet_compare.auth import (
+    SQL_COPT_SS_ACCESS_TOKEN,
+    is_azure_identity_auth,
+    odbc_sql_connection_string,
+    sql_access_token_from_cli,
+)
 from sql_parquet_compare.config import SqlConfig
 
 
@@ -23,6 +29,9 @@ def build_sqlalchemy_url(cfg: SqlConfig) -> URL | str:
         )
     if dialect in {"pyodbc", "mssql+pyodbc", "odbc"}:
         encrypt = cfg.encrypt or "yes"
+        trust = cfg.trust_server_certificate or (
+            "yes" if encrypt.lower() in {"no", "optional"} else "no"
+        )
         return URL.create(
             "mssql+pyodbc",
             username=cfg.username,
@@ -33,14 +42,49 @@ def build_sqlalchemy_url(cfg: SqlConfig) -> URL | str:
             query={
                 "driver": cfg.odbc_driver,
                 "Encrypt": encrypt,
-                "TrustServerCertificate": "yes" if encrypt.lower() in {"no", "optional"} else "no",
+                "TrustServerCertificate": trust,
             },
         )
     raise ValueError(f"Unsupported SQL dialect '{cfg.dialect}'. Use pymssql or pyodbc.")
 
 
 def create_sql_engine(cfg: SqlConfig) -> Engine:
+    if is_azure_identity_auth(cfg.auth):
+        return _create_azure_cli_engine(cfg)
     return create_engine(build_sqlalchemy_url(cfg), pool_pre_ping=True)
+
+
+def connect_azure_sql(cfg: SqlConfig):
+    """Open a pyodbc connection using an Azure CLI (or DefaultAzureCredential) access token."""
+    try:
+        import pyodbc
+    except ImportError as exc:
+        raise RuntimeError(
+            "Azure CLI SQL auth requires pyodbc and ODBC Driver 18. "
+            "Install with: pip install -e '.[odbc]'"
+        ) from exc
+
+    conn_str = odbc_sql_connection_string(
+        host=cfg.host,
+        port=int(cfg.port),
+        database=cfg.database,
+        driver=cfg.odbc_driver,
+        encrypt=cfg.encrypt or "yes",
+        trust_server_certificate=cfg.trust_server_certificate or None,
+    )
+    token = sql_access_token_from_cli(cfg.auth, cfg.tenant_id or None)
+    return pyodbc.connect(conn_str, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token})
+
+
+def _create_azure_cli_engine(cfg: SqlConfig) -> Engine:
+    try:
+        import pyodbc  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "Azure CLI SQL auth requires pyodbc and ODBC Driver 18. "
+            "Install with: pip install -e '.[odbc]'"
+        ) from exc
+    return create_engine("mssql+pyodbc://", creator=lambda: connect_azure_sql(cfg), pool_pre_ping=True)
 
 
 def split_table_name(name: str, default_schema: str = "dbo") -> tuple[str, str]:

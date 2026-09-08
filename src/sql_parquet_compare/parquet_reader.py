@@ -5,9 +5,14 @@ from pathlib import Path
 
 import pandas as pd
 from azure.core.exceptions import ResourceExistsError
-from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
+from sql_parquet_compare.auth import (
+    LOGIN_HELP,
+    STORAGE_AAD_SCOPE,
+    azure_credential,
+    is_azure_identity_auth,
+)
 from sql_parquet_compare.config import StorageConfig
 
 
@@ -85,14 +90,40 @@ def _container_client(storage: StorageConfig) -> ContainerClient:
 
 
 def _blob_service(storage: StorageConfig) -> BlobServiceClient:
+    if is_azure_identity_auth(storage.auth):
+        account_url = storage.blob_account_url()
+        if not account_url:
+            raise ValueError(
+                "Azure CLI storage auth needs AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_ACCOUNT"
+            )
+        return BlobServiceClient(
+            account_url=account_url,
+            credential=_cli_credential(storage.auth, storage.tenant_id or None),
+        )
     if storage.connection_string:
         conn = storage.connection_string
         if _is_azurite(conn):
             conn = "UseDevelopmentStorage=true"
         return BlobServiceClient.from_connection_string(conn)
-    if storage.account_url:
-        return BlobServiceClient(account_url=storage.account_url, credential=DefaultAzureCredential())
-    raise ValueError("Azure storage needs AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL")
+    if storage.blob_account_url():
+        return BlobServiceClient(
+            account_url=storage.blob_account_url(),
+            credential=_cli_credential("azure_cli", storage.tenant_id or None),
+        )
+    raise ValueError(
+        "Azure storage needs STORAGE_AUTH=azure_cli with an account URL, or AZURE_STORAGE_CONNECTION_STRING"
+    )
+
+
+def _cli_credential(mode: str, tenant_id: str | None):
+    from azure.identity import CredentialUnavailableError
+
+    credential = azure_credential(mode, tenant_id)
+    try:
+        credential.get_token(STORAGE_AAD_SCOPE)
+    except CredentialUnavailableError as exc:
+        raise RuntimeError(LOGIN_HELP) from exc
+    return credential
 
 
 def _is_azurite(connection_string: str) -> bool:

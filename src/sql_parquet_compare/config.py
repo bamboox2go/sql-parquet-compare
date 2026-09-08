@@ -38,14 +38,17 @@ def _expand(obj: Any) -> Any:
 @dataclass
 class SqlConfig:
     dialect: str = "pymssql"
+    auth: str = "sql"
     host: str = "127.0.0.1"
     port: int = 1433
     database: str = "CompareTest"
     username: str = "sa"
     password: str = ""
     encrypt: str = "no"
+    trust_server_certificate: str = ""
     odbc_driver: str = "ODBC Driver 18 for SQL Server"
     odbc_connect: str | None = None
+    tenant_id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> SqlConfig:
@@ -53,35 +56,51 @@ class SqlConfig:
         port = data.get("port", cls.port)
         return cls(
             dialect=str(data.get("dialect", cls.dialect)),
+            auth=str(data.get("auth", cls.auth) or cls.auth).lower(),
             host=str(data.get("host", cls.host)),
             port=int(port) if str(port) else cls.port,
             database=str(data.get("database", cls.database)),
             username=str(data.get("username", cls.username)),
             password=str(data.get("password", cls.password)),
             encrypt=str(data.get("encrypt", cls.encrypt)),
+            trust_server_certificate=str(data.get("trust_server_certificate", "") or ""),
             odbc_driver=str(data.get("odbc_driver", cls.odbc_driver)),
             odbc_connect=data.get("odbc_connect"),
+            tenant_id=str(data.get("tenant_id", "") or ""),
         )
 
 
 @dataclass
 class StorageConfig:
     backend: str = "azure"
+    auth: str = "connection_string"
     connection_string: str = ""
     account_url: str = ""
+    account_name: str = ""
     container: str = "parquet"
     local_root: str = ""
+    tenant_id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> StorageConfig:
         data = data or {}
         return cls(
             backend=str(data.get("backend", cls.backend)).lower(),
+            auth=str(data.get("auth", cls.auth) or cls.auth).lower(),
             connection_string=str(data.get("connection_string", "") or ""),
             account_url=str(data.get("account_url", "") or ""),
+            account_name=str(data.get("account_name", "") or ""),
             container=str(data.get("container", cls.container)),
             local_root=str(data.get("local_root", "") or ""),
+            tenant_id=str(data.get("tenant_id", "") or ""),
         )
+
+    def blob_account_url(self) -> str:
+        if self.account_url:
+            return self.account_url.rstrip("/")
+        if self.account_name:
+            return f"https://{self.account_name}.blob.core.windows.net"
+        return ""
 
 
 @dataclass

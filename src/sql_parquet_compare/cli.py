@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from sql_parquet_compare.auth import LOGIN_HELP, STORAGE_AAD_SCOPE, SQL_AAD_SCOPE, get_token, is_azure_identity_auth
 from sql_parquet_compare.comparer import CompareResult, compare_frames
 from sql_parquet_compare.config import AppConfig, load_config
 from sql_parquet_compare.parquet_reader import read_parquet
@@ -20,10 +21,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--table", action="append", dest="tables", help="Limit to one or more table names")
     parser.add_argument("--json", action="store_true", help="Print JSON results")
     parser.add_argument("--fail-fast", action="store_true", help="Stop on the first mismatch")
+    parser.add_argument(
+        "--check-auth",
+        action="store_true",
+        help="Verify Azure CLI tokens for SQL and Storage, then exit",
+    )
     args = parser.parse_args(argv)
 
     env_path = Path(args.env) if args.env and Path(args.env).exists() else None
     config = load_config(args.config, env_file=env_path)
+
+    if args.check_auth:
+        return check_auth(config)
+
     results = run_comparisons(config, table_names=args.tables, fail_fast=args.fail_fast)
 
     if args.json:
@@ -33,6 +43,34 @@ def main(argv: list[str] | None = None) -> int:
             print(item.message)
 
     return 0 if all(item.passed for item in results) else 1
+
+
+def check_auth(config: AppConfig) -> int:
+    ok = True
+    if is_azure_identity_auth(config.sql.auth):
+        try:
+            get_token(config.sql.auth, SQL_AAD_SCOPE, config.sql.tenant_id or None)
+            print(f"SQL Azure CLI token: OK ({config.sql.host}/{config.sql.database})")
+        except Exception as exc:
+            ok = False
+            print(f"SQL Azure CLI token: FAIL\n{exc}", file=sys.stderr)
+    else:
+        print(f"SQL auth: {config.sql.auth} (username/password, not Azure CLI)")
+
+    if is_azure_identity_auth(config.storage.auth):
+        try:
+            get_token(config.storage.auth, STORAGE_AAD_SCOPE, config.storage.tenant_id or None)
+            print(f"Storage Azure CLI token: OK ({config.storage.blob_account_url() or config.storage.account_name})")
+        except Exception as exc:
+            ok = False
+            print(f"Storage Azure CLI token: FAIL\n{exc}", file=sys.stderr)
+    else:
+        print(f"Storage auth: {config.storage.auth} (connection string / Azurite, not Azure CLI)")
+
+    if not ok:
+        print(LOGIN_HELP, file=sys.stderr)
+        return 1
+    return 0
 
 
 def run_comparisons(
@@ -45,6 +83,13 @@ def run_comparisons(
         mappings = [config.table(name) for name in table_names]
     if not mappings:
         raise SystemExit("No tables configured")
+
+    if is_azure_identity_auth(config.sql.auth) or is_azure_identity_auth(config.storage.auth):
+        print(
+            f"Auth: SQL={config.sql.auth} Storage={config.storage.auth} "
+            "(using current `az login` session)",
+            file=sys.stderr,
+        )
 
     engine = create_sql_engine(config.sql)
     results: list[CompareResult] = []
